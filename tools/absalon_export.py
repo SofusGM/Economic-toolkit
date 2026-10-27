@@ -71,6 +71,14 @@ def _next_link(header):
     return None
 
 
+def fix_mojibake(text):
+    """Repair UTF-8 read as cp1252, which Absalon has in some course names ("Ã˜konomi")."""
+    try:
+        return text.encode("cp1252").decode("utf-8")
+    except UnicodeError:
+        return text
+
+
 def safe_name(name):
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
     return name[:150] or "untitled"
@@ -105,7 +113,11 @@ def main():
 
     token = os.environ.get("CANVAS_TOKEN") or getpass.getpass("Absalon access token: ")
     canvas = Canvas(args.base_url, token)
-    out = Path(args.out).expanduser()
+    out = Path(args.out).expanduser().resolve()
+    # Course material is copyrighted and must never be committed to GitHub.
+    repo = next((p for p in (out, *out.parents) if (p / ".git").exists()), None)
+    if repo:
+        sys.exit(f"Refusing to write into the git repository {repo}. Choose a folder outside it, e.g. OneDrive.")
     out.mkdir(parents=True, exist_ok=True)
 
     courses = canvas.get_all("/courses", {"include[]": "term", "state[]": ["available", "completed"]})
@@ -116,10 +128,10 @@ def main():
     inventory = ["# Absalon courses\n"]
     for course in courses:
         term = course.get("term", {}).get("name", "No term")
-        name = course["name"]
+        name = fix_mojibake(course["name"])
         print(f"\n== {name} ({term})")
 
-        inventory.append(f"\n## {name}\n\n- Term: {term}\n- Code: {course.get('course_code', '')}\n")
+        inventory.append(f"\n## {name}\n\n- Term: {term}\n- Code: {fix_mojibake(course.get('course_code', ''))}\n")
         try:
             modules = canvas.get_all(f"/courses/{course['id']}/modules")
             if modules:
