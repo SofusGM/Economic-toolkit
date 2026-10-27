@@ -1,0 +1,5 @@
+.DS_Store
+# Course material is copyrighted: keep it in OneDrive, not here
+Absalon/
+*.part
+__pycache__/
